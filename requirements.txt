@@ -20,4 +20,3 @@ thread==2.0.6
 tqdm>=4.66.5
 tqdm==4.67.3
 urllib3_secure_extra==0.1.0
-xmlrpclib==1.0.1
