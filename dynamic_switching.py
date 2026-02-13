@@ -3,7 +3,7 @@ from anisotropy import field
 from math import cos, sin
 
 
-def switching(V_MTJ, I_SOT, R_MTJ, theta, phi, ESTT, ESOT, VNV = 1, NON=0, R_SOT_FL_DL=0.83, R_STT_FL_DL = 0):
+def switching(V_MTJ, I_SOT, R_MTJ, theta, phi, ESTT, ESOT, H_APP, VNV = 1, NON=0, R_SOT_FL_DL=0.83, R_STT_FL_DL = 0):
     """
     Dynamic-switching module and solving LLG analytically
     Input: V_MTJ, I_SOT, R_MTJ, theta, phi
@@ -26,7 +26,7 @@ def switching(V_MTJ, I_SOT, R_MTJ, theta, phi, ESTT, ESOT, VNV = 1, NON=0, R_SOT
     # VNV = 0 #0,to reproduce paper, 1 to reproduce manual
 
     H_EFF, _ = field(theta, phi, V_MTJ, n, NON, ENE, VNV)
-
+    H_EFF += H_APP
     # Prepare parameters for LLG solving
     I_MTJ = V_MTJ/R_MTJ
     J_STT = I_MTJ/A1
