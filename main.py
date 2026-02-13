@@ -278,11 +278,11 @@ def paper_main_switch_without_VCMA(NON=0):
     plt.tight_layout()
     plt.grid()
     plt.legend(loc='upper left', title='H_EX = -50 Oe')
-    if (NON == 0):
+    if(NON == 0):
         plt.get_current_fig_manager().set_window_title('paper_main_switch_without_VCMA')
         plt.savefig('result/paper_main_switch_without_VCMA.png')
         plt.close()
-    elif (NON == 1):
+    elif(NON == 1):
         plt.get_current_fig_manager().set_window_title(
             'paper_main_switch_without_VCMA_with_noise')
         plt.savefig('result/paper_main_switch_without_VCMA_with_noise.png')
@@ -370,7 +370,7 @@ def switch_error_helper_function(I_SOT, NON):
             Phi[i+1] = phi
             R[i+1] = R_MTJ
 
-        if (M_z[sim_end] - (-1.0) < 1e-1):  # switching failure
+        if(M_z[sim_end] - (-1.0) < 1e-1):  # switching failure
             error_sum += 1
 
     # print('I_SOT = {}A, Elapsed = {}s'.format(I_SOT, t.time()-start_time))
@@ -485,54 +485,88 @@ def paper_main_switch_with_VCMA_different_ISOT(NON=0, VNV=1):
     # plt.show()
 
 
-def simulate_mtj_resistance_timeseries_sweep(NON=0, VNV=1):
+def paper_main_switch_with_VCMA_pulsed(
+    V_pulse,
+    t_pulse,
+    V_base=0.0,
+    NON=1,
+    VNV=1,
+    sim_end=25000,
+):
     """
-    To reproduce result in paper section III C Figure 5c
-    VCMA-Enabled -> VNV = 1
+    VCMA pulsed switching simulation.
 
-    H_EX = -50 Oe = H_DL_SOT
-    -> I_SOT =  (2*e*u0*Ms*tf*A2*(-50*1000/(4*pi)))/(h_bar*theta_SH)
-    V_MTJ from 1.3189, 1.3191, 1.333, 1.3489, 1.4937
-    From 0 to 25 ns
+    Parameters
+    ----------
+    V_pulse : float
+        MTJ voltage pulse amplitude (V). Common naming: V_MTJ or V_VCMA.
+    t_pulse : float
+        Pulse duration / pulse width (s). Common naming: t_pulse or tau_pulse.
+    V_base : float
+        Voltage applied outside the pulse window (V). Usually 0 V.
+    NON, VNV : int
+        Your existing model flags.
+    sim_end : int
+        End time index (in units of your discrete timestep).
     """
-    I_SOT = 0
-    V_MTJ = 1.3189
 
-    # Time range:
-    sim_startup = 1  # 1st stage
-    sim_end = 1000
+    # SOT current set by H_EX, as before
+    I_SOT = (2*e*u0*Ms*tf*A2*(-50*1000/(4*pi)))/(h_bar*theta_SH)  # -6.2619uA
 
-    # Input parameters, init to all 0s, save per t_step:
-    # matlab index inclusive
-    M_z = np.zeros(sim_end+1)  # sim_end+1 elements from 0th to sim_end-th
+    sim_startup = 1
+    time = np.arange(sim_startup-1, (sim_end+1))  # indices
+
+    # Convert pulse duration to number of steps
+    # Apply V_pulse from t=0 up to t_pulse (inclusive/exclusive depends on your convention)
+    pulse_steps = int(np.round(t_pulse / t_step))
+    pulse_end_idx = (sim_startup - 1) + pulse_steps  # last index where pulse may be active
+
+    # Allocate arrays
+    M_z = np.zeros(sim_end+1)
     Theta = np.zeros(sim_end+1)
     Phi = np.zeros(sim_end+1)
     R = np.zeros(sim_end+1)
     V = np.zeros(sim_end+1)
-    PAP = 1
 
+    PAP = 1
     R_MTJ, theta, mz, phi = init(PAP)
     R[0], Theta[0], M_z[0], Phi[0] = R_MTJ, theta, mz, phi
-    print('V_MTJ = {}V'.format(V_MTJ))
 
-    # 1st stage
     for i in trange(sim_startup-1, sim_end):
-        ESTT, ESOT = 0, 1
+        ESTT, ESOT = 0, 0
         R_MTJ = R[i]
 
-        mz, phi_temp, theta_temp = switching(
-            V_MTJ, I_SOT, R_MTJ, theta, phi, ESTT, ESOT, VNV=VNV, NON=NON, R_SOT_FL_DL=0)
-        phi, theta = phi_temp, theta_temp
-        R_MTJ = tmr(V_MTJ, mz)
+        # Pulse shaping: use V_pulse only during the pulse window
+        V_now = V_pulse if i <= pulse_end_idx else V_base
 
-        V[i] = V_MTJ
-        # for next iteration
+        mz, phi_temp, theta_temp = switching(
+            V_now, I_SOT, R_MTJ, theta, phi,
+            ESTT, ESOT, VNV=VNV, NON=NON, R_SOT_FL_DL=0
+        )
+        phi, theta = phi_temp, theta_temp
+        R_MTJ = tmr(V_now, mz)
+
+        V[i] = V_now
+
+        # next iteration
         M_z[i+1] = mz
         Theta[i+1] = theta
         Phi[i+1] = phi
         R[i+1] = R_MTJ
 
-    return R
+    # Plot
+    tick_spacing = 5e-9
+    plt.plot(time*t_step, M_z, label=f'V_pulse={V_pulse} V, t_pulse={t_pulse*1e9:.2f} ns')
+    plt.gca().xaxis.set_major_locator(plt.MultipleLocator(tick_spacing))
+    plt.xlabel('time(s)')
+    plt.ylabel('mz')
+    plt.tight_layout()
+    plt.grid()
+    plt.legend(loc='center right', title='H_EX = -50 Oe, \nI_SOT = -6.2619uA')
+    plt.get_current_fig_manager().set_window_title('paper_main_switch_with_VCMA_pulsed')
+    plt.savefig('result/paper_main_switch_with_VCMA_pulsed.png')
+    plt.close()
+
 
 
 def paper_proposed_main_switch_helper(t1, t2, V_MTJ_1, V_MTJ_2, I_SOT_1, I_SOT_2, NON=0, VNV=1, disable=False):
@@ -561,7 +595,7 @@ def paper_proposed_main_switch_helper(t1, t2, V_MTJ_1, V_MTJ_2, I_SOT_1, I_SOT_2
     R_MTJ, theta, mz, phi = init(PAP)
     R[0], Theta[0], M_z[0], Phi[0] = R_MTJ, theta, mz, phi
 
-    if (disable == False):
+    if(disable==False):
         print('\n1st stage')
     # 1st stage, V_MTJ_1 and I_SOT for t1
     for i in tqdm(range(sim_startup-1, sim_mid1), disable=disable):
@@ -580,7 +614,7 @@ def paper_proposed_main_switch_helper(t1, t2, V_MTJ_1, V_MTJ_2, I_SOT_1, I_SOT_2
         Phi[i+1] = phi
         R[i+1] = R_MTJ
 
-    if (disable == False):
+    if(disable==False):
         print('\n2nd stage')
     # 2nd stage, V_MTJ_2 and 0 for next t2
     for i in tqdm(range(sim_mid1, sim_mid2), disable=disable):
@@ -599,7 +633,7 @@ def paper_proposed_main_switch_helper(t1, t2, V_MTJ_1, V_MTJ_2, I_SOT_1, I_SOT_2
         Phi[i+1] = phi
         R[i+1] = R_MTJ
 
-    if (disable == False):
+    if(disable==False):
         print('\n3rd stage')
     # 3rd stage,
     for i in tqdm(range(sim_mid2, sim_end), disable=disable):
@@ -735,6 +769,7 @@ if __name__ == '__main__':
     # paper_switch_error_withoutVCMA_withNoise()
 
     # paper_main_switch_with_VCMA_different_ISOT()
-    simulate_mtj_resistance_timeseries_sweep()
+    paper_main_switch_with_VCMA_pulsed(V_pulse=1.2, t_pulse=5e-9)
+
     # paper_proposed_main_switch()
     # paper_proposed_switch_error_rate()
